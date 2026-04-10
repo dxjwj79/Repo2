@@ -357,6 +357,73 @@
   }
   .add-btn:active { transform: scale(0.93); }
 
+  .big-thing-zone {
+    margin: 10px 12px 6px;
+    border-radius: 10px;
+    border: 1.5px solid rgba(26,26,24,0.15);
+    background: #fffdf8;
+    overflow: hidden;
+  }
+  .big-thing-zone.drag-over {
+    border-color: #c85a1e;
+    box-shadow: 0 0 0 2px rgba(200,90,30,0.15);
+  }
+  .big-thing-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px 7px;
+    border-bottom: 1px solid rgba(26,26,24,0.08);
+  }
+  .big-thing-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: #8a5a2e;
+  }
+  .big-thing-label svg {
+    width: 12px; height: 12px;
+    fill: #c85a1e; flex-shrink: 0;
+  }
+  .big-thing-count {
+    font-size: 11px;
+    color: var(--ink3);
+    background: var(--paper2);
+    border-radius: 8px;
+    padding: 1px 7px;
+    font-weight: 400;
+  }
+  .big-thing-list {
+    list-style: none;
+    padding: 2px 0;
+    min-height: 38px;
+  }
+  .big-thing-list .task-item {
+    background: transparent;
+    padding-left: 12px;
+  }
+  .big-thing-empty {
+    padding: 10px 12px;
+    font-size: 12px;
+    color: var(--ink3);
+    font-style: italic;
+    font-weight: 300;
+    text-align: center;
+  }
+
+  .today-tasks-label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--ink3);
+    padding: 10px 16px 4px;
+  }
+
   .toast {
     position: fixed; bottom: 90px; left: 50%;
     transform: translateX(-50%);
@@ -421,6 +488,17 @@
       </div>
     </div>
     <div class="bucket-body" id="body-today">
+      <div class="big-thing-zone" id="bigthing-zone" data-id="bigthing">
+        <div class="big-thing-header">
+          <div class="big-thing-label">
+            <svg viewBox="0 0 12 12"><polygon points="6,1 7.5,4.5 11,5 8.5,7.5 9,11 6,9.5 3,11 3.5,7.5 1,5 4.5,4.5"/></svg>
+            Big thing
+          </div>
+          <span class="big-thing-count" id="count-bigthing">0</span>
+        </div>
+        <ul class="big-thing-list" id="list-bigthing"></ul>
+      </div>
+      <div class="today-tasks-label" id="today-tasks-label" style="display:none">Other tasks</div>
       <ul class="task-list" id="list-today"></ul>
     </div>
   </div>
@@ -471,12 +549,16 @@
 const STORAGE_KEY = 'tasks_v2';
 const DATE_KEY = 'tasks_last_date';
 const BUCKETS = ['inbox','today','tomorrow','week'];
+const ALL_BUCKETS = ['inbox','bigthing','today','tomorrow','week'];
 
 function todayStr() { return new Date().toISOString().slice(0,10); }
 
 function load() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {inbox:[],today:[],tomorrow:[],week:[]}; }
-  catch { return {inbox:[],today:[],tomorrow:[],week:[]}; }
+  try {
+    const d = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    return { inbox:[], bigthing:[], today:[], tomorrow:[], week:[], ...d };
+  }
+  catch { return {inbox:[], bigthing:[], today:[], tomorrow:[], week:[]}; }
 }
 function save(d) { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }
 
@@ -489,12 +571,22 @@ function rollForward(data) {
   if (lastDate) {
     const diffDays = Math.round((new Date(today) - new Date(lastDate)) / 86400000);
     if (diffDays >= 1) {
+      // Roll tomorrow → today
       const undone = data.tomorrow.filter(t => !t.done);
       if (undone.length > 0) {
         data.today = [...undone.map(t => ({...t, rolledOver: true})), ...data.today];
         data.tomorrow = data.tomorrow.filter(t => t.done);
         rolled = true;
       }
+      // Roll bigthing → today (incomplete Big Things carry forward as regular today tasks)
+      if (!data.bigthing) data.bigthing = [];
+      const undoneBig = data.bigthing.filter(t => !t.done);
+      if (undoneBig.length > 0) {
+        data.today = [...undoneBig.map(t => ({...t, rolledOver: true})), ...data.today];
+        data.bigthing = data.bigthing.filter(t => t.done);
+        rolled = true;
+      }
+      // Roll today → today (mark as rolled if more than 1 day has passed)
       if (diffDays >= 2) {
         const undoneToday = data.today.filter(t => !t.done && !t.rolledOver);
         if (undoneToday.length > 0) {
@@ -602,11 +694,41 @@ function init() {
 }
 
 function render() {
+  // Render bigthing sub-bucket
+  const btList = document.getElementById('list-bigthing');
+  const btCount = document.getElementById('count-bigthing');
+  const btItems = state.bigthing || [];
+  const btUndone = btItems.filter(t => !t.done).length;
+  btCount.textContent = btUndone || '';
+  btList.innerHTML = '';
+  if (btItems.length === 0) {
+    const hint = document.createElement('li');
+    hint.className = 'big-thing-empty';
+    hint.textContent = 'Drag your top priority here';
+    btList.appendChild(hint);
+  } else {
+    btItems.forEach((task, idx) => {
+      btList.appendChild(makeTaskEl(task, 'bigthing', idx));
+    });
+  }
+
+  // Show "Other tasks" label only if bigthing has items
+  document.getElementById('today-tasks-label').style.display =
+    btItems.length > 0 ? 'block' : 'none';
+
+  // Render normal buckets
   BUCKETS.forEach(bid => {
     const list = document.getElementById('list-' + bid);
     const countEl = document.getElementById('count-' + bid);
     const items = state[bid] || [];
-    countEl.textContent = items.filter(t => !t.done).length || '';
+
+    // today count includes bigthing
+    const undone = items.filter(t => !t.done).length;
+    if (bid === 'today') {
+      countEl.textContent = (undone + btUndone) || '';
+    } else {
+      countEl.textContent = undone || '';
+    }
 
     list.innerHTML = '';
 
@@ -619,60 +741,71 @@ function render() {
     }
 
     items.forEach((task, idx) => {
-      const li = document.createElement('li');
-      li.className = 'task-item';
-      li.dataset.bucket = bid;
-      li.dataset.idx = idx;
-      li.draggable = true;
-
-      const check = document.createElement('div');
-      check.className = 'task-check' + (task.done ? ' checked' : '');
-      check.addEventListener('click', e => { e.stopPropagation(); toggleDone(bid, idx); });
-
-      const textEl = document.createElement('div');
-      textEl.className = 'task-text' + (task.done ? ' done' : '');
-      textEl.textContent = task.text;
-
-      const right = document.createElement('div');
-      right.style.cssText = 'display:flex;align-items:flex-start;gap:6px;flex-shrink:0;';
-
-      if (task.rolledOver && !task.done) {
-        const badge = document.createElement('div');
-        badge.className = 'rollover-badge';
-        badge.textContent = 'rolled';
-        right.appendChild(badge);
-      }
-
-      const del = document.createElement('button');
-      del.className = 'task-delete';
-      del.textContent = '×';
-      del.setAttribute('aria-label', 'Delete');
-      del.addEventListener('click', e => { e.stopPropagation(); deleteTask(bid, idx); });
-      right.appendChild(del);
-
-      const handle = document.createElement('div');
-      handle.className = 'drag-handle';
-      for (let i = 0; i < 3; i++) handle.appendChild(document.createElement('span'));
-
-      li.appendChild(check);
-      li.appendChild(textEl);
-      li.appendChild(right);
-      li.appendChild(handle);
-
-      li.addEventListener('dragstart', onDragStart);
-      li.addEventListener('dragend', onDragEnd);
-      li.addEventListener('touchstart', onTouchStart, {passive: false});
-
-      list.appendChild(li);
+      list.appendChild(makeTaskEl(task, bid, idx));
     });
   });
 
+  // Bind drop zones: normal buckets
   BUCKETS.forEach(bid => {
     const body = document.getElementById('body-' + bid);
     body.addEventListener('dragover', onDragOver);
     body.addEventListener('dragleave', onDragLeave);
     body.addEventListener('drop', onDrop);
   });
+
+  // Bind bigthing drop zone
+  const btZone = document.getElementById('bigthing-zone');
+  btZone.addEventListener('dragover', onBigThingDragOver);
+  btZone.addEventListener('dragleave', onBigThingDragLeave);
+  btZone.addEventListener('drop', onBigThingDrop);
+}
+
+function makeTaskEl(task, bid, idx) {
+  const li = document.createElement('li');
+  li.className = 'task-item';
+  li.dataset.bucket = bid;
+  li.dataset.idx = idx;
+  li.draggable = true;
+
+  const check = document.createElement('div');
+  check.className = 'task-check' + (task.done ? ' checked' : '');
+  check.addEventListener('click', e => { e.stopPropagation(); toggleDone(bid, idx); });
+
+  const textEl = document.createElement('div');
+  textEl.className = 'task-text' + (task.done ? ' done' : '');
+  textEl.textContent = task.text;
+
+  const right = document.createElement('div');
+  right.style.cssText = 'display:flex;align-items:flex-start;gap:6px;flex-shrink:0;';
+
+  if (task.rolledOver && !task.done) {
+    const badge = document.createElement('div');
+    badge.className = 'rollover-badge';
+    badge.textContent = 'rolled';
+    right.appendChild(badge);
+  }
+
+  const del = document.createElement('button');
+  del.className = 'task-delete';
+  del.textContent = '×';
+  del.setAttribute('aria-label', 'Delete');
+  del.addEventListener('click', e => { e.stopPropagation(); deleteTask(bid, idx); });
+  right.appendChild(del);
+
+  const handle = document.createElement('div');
+  handle.className = 'drag-handle';
+  for (let i = 0; i < 3; i++) handle.appendChild(document.createElement('span'));
+
+  li.appendChild(check);
+  li.appendChild(textEl);
+  li.appendChild(right);
+  li.appendChild(handle);
+
+  li.addEventListener('dragstart', onDragStart);
+  li.addEventListener('dragend', onDragEnd);
+  li.addEventListener('touchstart', onTouchStart, {passive: false});
+
+  return li;
 }
 
 function toggleDone(bid, idx) {
@@ -693,10 +826,33 @@ function addTask(text) {
 }
 
 function moveTask(fromBid, fromIdx, toBid) {
+  if (!state[fromBid] || !state[toBid] && toBid !== 'bigthing') return;
+  if (!state[toBid]) state[toBid] = [];
   const task = state[fromBid].splice(fromIdx, 1)[0];
   task.rolledOver = false;
   state[toBid].unshift(task);
   save(state); render();
+}
+
+// Desktop drag — bigthing zone
+function onBigThingDragOver(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  document.getElementById('bigthing-zone').classList.add('drag-over');
+  // Remove today bucket highlight so they don't both glow
+  document.querySelector('.bucket[data-id="today"]').classList.remove('drag-over');
+}
+function onBigThingDragLeave(e) {
+  if (!document.getElementById('bigthing-zone').contains(e.relatedTarget)) {
+    document.getElementById('bigthing-zone').classList.remove('drag-over');
+  }
+}
+function onBigThingDrop(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  document.getElementById('bigthing-zone').classList.remove('drag-over');
+  if (!dragTask) return;
+  if (dragTask.bucket !== 'bigthing') moveTask(dragTask.bucket, dragTask.idx, 'bigthing');
 }
 
 // Desktop drag
@@ -708,7 +864,7 @@ function onDragStart(e) {
 }
 function onDragEnd() {
   this.classList.remove('dragging');
-  document.querySelectorAll('.bucket').forEach(b => b.classList.remove('drag-over'));
+  document.querySelectorAll('.bucket, #bigthing-zone').forEach(b => b.classList.remove('drag-over'));
   dragTask = null;
 }
 function onDragOver(e) {
@@ -760,12 +916,17 @@ function onTouchMove(e) {
   const touch = e.touches[0];
   ghostEl.style.left = (touch.clientX - touchOffX) + 'px';
   ghostEl.style.top = (touch.clientY - touchOffY) + 'px';
-  document.querySelectorAll('.bucket').forEach(b => b.classList.remove('drag-over'));
+  document.querySelectorAll('.bucket, #bigthing-zone').forEach(b => b.classList.remove('drag-over'));
   ghostEl.style.visibility = 'hidden';
   const under = document.elementFromPoint(touch.clientX, touch.clientY);
   ghostEl.style.visibility = '';
-  const bucket = under?.closest('.bucket');
-  if (bucket) bucket.classList.add('drag-over');
+  const btZone = under?.closest('#bigthing-zone');
+  if (btZone) {
+    btZone.classList.add('drag-over');
+  } else {
+    const bucket = under?.closest('.bucket');
+    if (bucket) bucket.classList.add('drag-over');
+  }
 }
 
 function onTouchEnd(e) {
@@ -774,11 +935,15 @@ function onTouchEnd(e) {
   ghostEl.style.visibility = 'hidden';
   const under = document.elementFromPoint(touch.clientX, touch.clientY);
   ghostEl.style.visibility = '';
-  const bucket = under?.closest('.bucket');
-  const targetBid = bucket?.dataset.id;
+
+  // Check bigthing zone first (it's nested inside today bucket)
+  const btZone = under?.closest('#bigthing-zone');
+  const bucket = btZone ? null : under?.closest('.bucket');
+  const targetBid = btZone ? 'bigthing' : bucket?.dataset.id;
+
   ghostEl.remove(); ghostEl = null;
   touchEl?.classList.remove('dragging'); touchEl = null;
-  document.querySelectorAll('.bucket').forEach(b => b.classList.remove('drag-over'));
+  document.querySelectorAll('.bucket, #bigthing-zone').forEach(b => b.classList.remove('drag-over'));
   document.removeEventListener('touchmove', onTouchMove);
   document.removeEventListener('touchend', onTouchEnd);
   if (targetBid && targetBid !== touchSrcBucket) moveTask(touchSrcBucket, touchSrcIdx, targetBid);
