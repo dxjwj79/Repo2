@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Tasks">
+<meta name="theme-color" content="#f5f3ee">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Tasks</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #1a1a18;
+    --ink2: #5a5a55;
+    --ink3: #9a9a94;
+    --paper: #f5f3ee;
+    --paper2: #edeae3;
+    --paper3: #e4e0d7;
+    --white: #ffffff;
+    --accent: #c85a1e;
+    --accent-soft: #f5e8e0;
+    --today: #1a5c38;
+    --today-soft: #e0ede6;
+    --tomorrow: #1a3d6e;
+    --tomorrow-soft: #dde6f0;
+    --week: #5a3a7a;
+    --week-soft: #ece5f5;
+    --border: rgba(26,26,24,0.12);
+    --radius: 14px;
+    --font-display: 'DM Serif Display', Georgia, serif;
+    --font-body: 'DM Sans', system-ui, sans-serif;
+  }
+
+  body {
+    font-family: var(--font-body);
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100dvh;
+    -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+  }
+
+  /* Install banner */
+  #install-banner {
+    display: none;
+    background: var(--ink);
+    color: var(--white);
+    padding: 12px 16px;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+  }
+  #install-banner.visible { display: flex; }
+  #install-banner p { flex: 1; line-height: 1.4; }
+  #install-banner p strong { font-weight: 500; display: block; margin-bottom: 1px; }
+  #install-banner p span { opacity: 0.65; font-size: 12px; }
+  .banner-btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .banner-dismiss {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.5);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  /* iOS install hint */
+  #ios-hint {
+    display: none;
+    position: fixed;
+    bottom: 80px;
+    left: 16px;
+    right: 16px;
+    background: var(--ink);
+    color: var(--white);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 13px;
+    line-height: 1.5;
+    z-index: 500;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+  #ios-hint.visible { display: block; }
+  #ios-hint::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 8px solid var(--ink);
+  }
+  #ios-hint strong { display: block; font-weight: 500; margin-bottom: 4px; }
+  #ios-hint .close-hint {
+    position: absolute;
+    top: 10px; right: 12px;
+    background: none; border: none;
+    color: rgba(255,255,255,0.5);
+    font-size: 18px; cursor: pointer;
+  }
+
+  header {
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px 14px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  header h1 {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 400;
+    letter-spacing: -0.3px;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .date-chip {
+    font-size: 12px;
+    color: var(--ink3);
+    font-weight: 300;
+    letter-spacing: 0.3px;
+  }
+
+  #install-icon-btn {
+    display: none;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #install-icon-btn.visible { display: block; }
+
+  .main {
+    padding: 16px 16px 120px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .bucket {
+    background: var(--white);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    margin-bottom: 14px;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+  }
+
+  .bucket.drag-over { box-shadow: 0 0 0 2.5px var(--accent); }
+
+  .bucket-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 16px 11px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .bucket-label { display: flex; align-items: center; gap: 9px; }
+
+  .bucket-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%; flex-shrink: 0;
+  }
+
+  .bucket-name {
+    font-size: 13px; font-weight: 500;
+    letter-spacing: 0.4px; text-transform: uppercase;
+  }
+
+  .bucket-meta { display: flex; align-items: center; gap: 8px; }
+
+  .bucket-count {
+    font-size: 12px; color: var(--ink3); font-weight: 400;
+    min-width: 18px; height: 18px;
+    background: var(--paper2); border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 6px;
+  }
+
+  .chevron {
+    font-size: 11px; color: var(--ink3);
+    transition: transform 0.2s;
+    display: inline-block;
+  }
+  .chevron.up { transform: rotate(180deg); }
+
+  .bucket[data-id="inbox"] .bucket-dot { background: var(--accent); }
+  .bucket[data-id="inbox"] .bucket-name { color: var(--accent); }
+  .bucket[data-id="today"] .bucket-dot { background: var(--today); }
+  .bucket[data-id="today"] .bucket-name { color: var(--today); }
+  .bucket[data-id="tomorrow"] .bucket-dot { background: var(--tomorrow); }
+  .bucket[data-id="tomorrow"] .bucket-name { color: var(--tomorrow); }
+  .bucket[data-id="week"] .bucket-dot { background: var(--week); }
+  .bucket[data-id="week"] .bucket-name { color: var(--week); }
+
+  .bucket-body { min-height: 44px; }
+  .bucket-body.collapsed { display: none; }
+
+  .task-list { list-style: none; padding: 4px 0; }
+
+  .empty-hint {
+    padding: 18px 16px;
+    font-size: 13px; color: var(--ink3);
+    text-align: center; font-style: italic; font-weight: 300;
+  }
+
+  .task-item {
+    display: flex; align-items: flex-start;
+    gap: 10px; padding: 11px 14px 11px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: grab; touch-action: none;
+    position: relative;
+    transition: background 0.15s;
+    -webkit-user-select: none; user-select: none;
+  }
+  .task-item:last-child { border-bottom: none; }
+  .task-item.dragging { opacity: 0.35; }
+  .task-item.touch-dragging {
+    opacity: 1;
+    box-shadow: 0 8px 28px rgba(26,26,24,0.2);
+    border-radius: 10px;
+    background: var(--white);
+    position: fixed; z-index: 999;
+    pointer-events: none;
+    border: 1.5px solid var(--border);
+    max-width: calc(min(480px, 100vw) - 32px);
+    width: calc(100vw - 32px);
+  }
+
+  .task-check {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    flex-shrink: 0; margin-top: 1px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .task-check:active { transform: scale(0.9); }
+  .task-check.checked { background: var(--paper3); border-color: var(--paper3); }
+  .task-check.checked::after {
+    content: '';
+    width: 6px; height: 10px;
+    border-right: 2px solid var(--ink3);
+    border-bottom: 2px solid var(--ink3);
+    transform: rotate(45deg) translate(-1px, -1px);
+    display: block;
+  }
+
+  .task-text {
+    flex: 1; font-size: 15px; font-weight: 400;
+    line-height: 1.4; color: var(--ink);
+    word-break: break-word; padding-top: 1px;
+  }
+  .task-text.done {
+    color: var(--ink3);
+    text-decoration: line-through;
+    text-decoration-color: var(--ink3);
+  }
+
+  .rollover-badge {
+    font-size: 10px; font-weight: 500; letter-spacing: 0.3px;
+    color: var(--accent); background: var(--accent-soft);
+    border-radius: 4px; padding: 2px 6px;
+    flex-shrink: 0; margin-top: 3px;
+  }
+
+  .drag-handle {
+    display: flex; flex-direction: column;
+    gap: 3px; padding: 4px 0;
+    flex-shrink: 0; opacity: 0.25;
+  }
+  .drag-handle span {
+    display: block; width: 16px; height: 1.5px;
+    background: var(--ink); border-radius: 2px;
+  }
+
+  .task-delete {
+    opacity: 0; background: none; border: none;
+    color: var(--ink3); font-size: 18px; cursor: pointer;
+    padding: 0 4px; line-height: 1; flex-shrink: 0;
+    transition: opacity 0.15s, color 0.15s;
+  }
+  .task-item:hover .task-delete { opacity: 1; }
+  .task-item.show-del .task-delete { opacity: 1; }
+
+  .add-bar {
+    position: fixed; bottom: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 100%; max-width: 480px;
+    background: var(--white);
+    border-top: 1px solid var(--border);
+    padding: 12px 16px env(safe-area-inset-bottom, 16px);
+    z-index: 200;
+  }
+
+  .add-row { display: flex; gap: 8px; align-items: center; }
+
+  .add-input {
+    flex: 1; height: 44px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px; padding: 0 14px;
+    font-family: var(--font-body); font-size: 15px;
+    color: var(--ink); background: var(--paper);
+    outline: none; transition: border-color 0.15s;
+    -webkit-appearance: none;
+  }
+  .add-input:focus { border-color: var(--accent); background: var(--white); }
+  .add-input::placeholder { color: var(--ink3); }
+
+  .add-btn {
+    width: 44px; height: 44px;
+    border-radius: 10px; background: var(--accent);
+    color: white; border: none;
+    font-size: 22px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: transform 0.1s;
+  }
+  .add-btn:active { transform: scale(0.93); }
+
+  .toast {
+    position: fixed; bottom: 90px; left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink); color: var(--white);
+    font-size: 13px; padding: 8px 16px;
+    border-radius: 8px; opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none; z-index: 300;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="install-banner">
+  <p><strong>Add to Home Screen</strong><span>Works offline, no app store needed</span></p>
+  <button class="banner-btn" id="install-btn">Install</button>
+  <button class="banner-dismiss" id="dismiss-banner" aria-label="Dismiss">×</button>
+</div>
+
+<div id="ios-hint">
+  <button class="close-hint" id="close-ios-hint">×</button>
+  <strong>Add to Home Screen</strong>
+  Tap the Share button in Safari, then choose <em>"Add to Home Screen"</em> to install this app.
+</div>
+
+<header>
+  <h1>Tasks</h1>
+  <div class="header-right">
+    <button id="install-icon-btn">+ Install</button>
+    <span class="date-chip" id="today-date"></span>
+  </div>
+</header>
+
+<div class="main">
+  <div class="bucket" data-id="inbox">
+    <div class="bucket-header">
+      <div class="bucket-label">
+        <div class="bucket-dot"></div>
+        <span class="bucket-name">Inbox</span>
+      </div>
+      <div class="bucket-meta">
+        <span class="bucket-count" id="count-inbox">0</span>
+        <span class="chevron up">▼</span>
+      </div>
+    </div>
+    <div class="bucket-body" id="body-inbox">
+      <ul class="task-list" id="list-inbox"></ul>
+    </div>
+  </div>
+
+  <div class="bucket" data-id="today">
+    <div class="bucket-header">
+      <div class="bucket-label">
+        <div class="bucket-dot"></div>
+        <span class="bucket-name">Today</span>
+      </div>
+      <div class="bucket-meta">
+        <span class="bucket-count" id="count-today">0</span>
+        <span class="chevron up">▼</span>
+      </div>
+    </div>
+    <div class="bucket-body" id="body-today">
+      <ul class="task-list" id="list-today"></ul>
+    </div>
+  </div>
+
+  <div class="bucket" data-id="tomorrow">
+    <div class="bucket-header">
+      <div class="bucket-label">
+        <div class="bucket-dot"></div>
+        <span class="bucket-name">Tomorrow</span>
+      </div>
+      <div class="bucket-meta">
+        <span class="bucket-count" id="count-tomorrow">0</span>
+        <span class="chevron up">▼</span>
+      </div>
+    </div>
+    <div class="bucket-body" id="body-tomorrow">
+      <ul class="task-list" id="list-tomorrow"></ul>
+    </div>
+  </div>
+
+  <div class="bucket" data-id="week">
+    <div class="bucket-header">
+      <div class="bucket-label">
+        <div class="bucket-dot"></div>
+        <span class="bucket-name">This Week</span>
+      </div>
+      <div class="bucket-meta">
+        <span class="bucket-count" id="count-week">0</span>
+        <span class="chevron up">▼</span>
+      </div>
+    </div>
+    <div class="bucket-body" id="body-week">
+      <ul class="task-list" id="list-week"></ul>
+    </div>
+  </div>
+</div>
+
+<div class="add-bar">
+  <div class="add-row">
+    <input class="add-input" id="add-input" type="text" placeholder="Add a task to inbox…" autocomplete="off" autocorrect="off" autocapitalize="sentences">
+    <button class="add-btn" id="add-btn" aria-label="Add task">+</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'tasks_v2';
+const DATE_KEY = 'tasks_last_date';
+const BUCKETS = ['inbox','today','tomorrow','week'];
+
+function todayStr() { return new Date().toISOString().slice(0,10); }
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {inbox:[],today:[],tomorrow:[],week:[]}; }
+  catch { return {inbox:[],today:[],tomorrow:[],week:[]}; }
+}
+function save(d) { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }
+
+function rollForward(data) {
+  const lastDate = localStorage.getItem(DATE_KEY);
+  const today = todayStr();
+  if (lastDate === today) return { data, rolled: false };
+
+  let rolled = false;
+  if (lastDate) {
+    const diffDays = Math.round((new Date(today) - new Date(lastDate)) / 86400000);
+    if (diffDays >= 1) {
+      const undone = data.tomorrow.filter(t => !t.done);
+      if (undone.length > 0) {
+        data.today = [...undone.map(t => ({...t, rolledOver: true})), ...data.today];
+        data.tomorrow = data.tomorrow.filter(t => t.done);
+        rolled = true;
+      }
+      if (diffDays >= 2) {
+        const undoneToday = data.today.filter(t => !t.done && !t.rolledOver);
+        if (undoneToday.length > 0) {
+          data.today = data.today.map(t => (!t.done ? {...t, rolledOver: true} : t));
+          rolled = true;
+        }
+      }
+    }
+  }
+  localStorage.setItem(DATE_KEY, today);
+  save(data);
+  return { data, rolled };
+}
+
+function makeId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+let state = load();
+let deferredPrompt = null;
+let ghostEl = null;
+let touchSrcBucket = null, touchSrcIdx = null, touchOffX = 0, touchOffY = 0, touchEl = null;
+let dragTask = null;
+
+// PWA install
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if (!localStorage.getItem('install_dismissed')) {
+    document.getElementById('install-banner').classList.add('visible');
+  }
+  document.getElementById('install-icon-btn').classList.add('visible');
+});
+
+window.addEventListener('appinstalled', () => {
+  document.getElementById('install-banner').classList.remove('visible');
+  document.getElementById('install-icon-btn').classList.remove('visible');
+  showToast('App installed!');
+});
+
+document.getElementById('install-btn').addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  document.getElementById('install-banner').classList.remove('visible');
+});
+
+document.getElementById('install-icon-btn').addEventListener('click', async () => {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    document.getElementById('install-icon-btn').classList.remove('visible');
+  } else {
+    showIosHint();
+  }
+});
+
+document.getElementById('dismiss-banner').addEventListener('click', () => {
+  document.getElementById('install-banner').classList.remove('visible');
+  localStorage.setItem('install_dismissed', '1');
+});
+
+document.getElementById('close-ios-hint').addEventListener('click', () => {
+  document.getElementById('ios-hint').classList.remove('visible');
+});
+
+function showIosHint() {
+  const hint = document.getElementById('ios-hint');
+  hint.classList.add('visible');
+  setTimeout(() => hint.classList.remove('visible'), 6000);
+}
+
+// Check if iOS and not installed
+const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isStandalone = window.navigator.standalone === true;
+if (isIos && !isStandalone && !localStorage.getItem('ios_hint_shown')) {
+  setTimeout(showIosHint, 2000);
+  localStorage.setItem('ios_hint_shown', '1');
+  document.getElementById('install-icon-btn').classList.add('visible');
+}
+
+// Service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
+function showToast(msg, dur = 2200) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function init() {
+  const d = new Date();
+  document.getElementById('today-date').textContent =
+    d.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+
+  const { data, rolled } = rollForward(state);
+  state = data;
+  if (rolled) setTimeout(() => showToast('Rolled tasks forward'), 400);
+
+  render();
+  bindUI();
+}
+
+function render() {
+  BUCKETS.forEach(bid => {
+    const list = document.getElementById('list-' + bid);
+    const countEl = document.getElementById('count-' + bid);
+    const items = state[bid] || [];
+    countEl.textContent = items.filter(t => !t.done).length || '';
+
+    list.innerHTML = '';
+
+    if (items.length === 0) {
+      const hint = document.createElement('li');
+      hint.className = 'empty-hint';
+      hint.textContent = bid === 'inbox' ? 'Add tasks below, then drag to plan your day' : 'Drag tasks here';
+      list.appendChild(hint);
+      return;
+    }
+
+    items.forEach((task, idx) => {
+      const li = document.createElement('li');
+      li.className = 'task-item';
+      li.dataset.bucket = bid;
+      li.dataset.idx = idx;
+      li.draggable = true;
+
+      const check = document.createElement('div');
+      check.className = 'task-check' + (task.done ? ' checked' : '');
+      check.addEventListener('click', e => { e.stopPropagation(); toggleDone(bid, idx); });
+
+      const textEl = document.createElement('div');
+      textEl.className = 'task-text' + (task.done ? ' done' : '');
+      textEl.textContent = task.text;
+
+      const right = document.createElement('div');
+      right.style.cssText = 'display:flex;align-items:flex-start;gap:6px;flex-shrink:0;';
+
+      if (task.rolledOver && !task.done) {
+        const badge = document.createElement('div');
+        badge.className = 'rollover-badge';
+        badge.textContent = 'rolled';
+        right.appendChild(badge);
+      }
+
+      const del = document.createElement('button');
+      del.className = 'task-delete';
+      del.textContent = '×';
+      del.setAttribute('aria-label', 'Delete');
+      del.addEventListener('click', e => { e.stopPropagation(); deleteTask(bid, idx); });
+      right.appendChild(del);
+
+      const handle = document.createElement('div');
+      handle.className = 'drag-handle';
+      for (let i = 0; i < 3; i++) handle.appendChild(document.createElement('span'));
+
+      li.appendChild(check);
+      li.appendChild(textEl);
+      li.appendChild(right);
+      li.appendChild(handle);
+
+      li.addEventListener('dragstart', onDragStart);
+      li.addEventListener('dragend', onDragEnd);
+      li.addEventListener('touchstart', onTouchStart, {passive: false});
+
+      list.appendChild(li);
+    });
+  });
+
+  BUCKETS.forEach(bid => {
+    const body = document.getElementById('body-' + bid);
+    body.addEventListener('dragover', onDragOver);
+    body.addEventListener('dragleave', onDragLeave);
+    body.addEventListener('drop', onDrop);
+  });
+}
+
+function toggleDone(bid, idx) {
+  state[bid][idx].done = !state[bid][idx].done;
+  if (state[bid][idx].done) state[bid][idx].rolledOver = false;
+  save(state); render();
+}
+
+function deleteTask(bid, idx) {
+  state[bid].splice(idx, 1);
+  save(state); render();
+}
+
+function addTask(text) {
+  if (!text.trim()) return;
+  state.inbox.unshift({ id: makeId(), text: text.trim(), done: false, rolledOver: false });
+  save(state); render();
+}
+
+function moveTask(fromBid, fromIdx, toBid) {
+  const task = state[fromBid].splice(fromIdx, 1)[0];
+  task.rolledOver = false;
+  state[toBid].unshift(task);
+  save(state); render();
+}
+
+// Desktop drag
+function onDragStart(e) {
+  dragTask = { bucket: this.dataset.bucket, idx: parseInt(this.dataset.idx) };
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', '');
+  setTimeout(() => this.classList.add('dragging'), 0);
+}
+function onDragEnd() {
+  this.classList.remove('dragging');
+  document.querySelectorAll('.bucket').forEach(b => b.classList.remove('drag-over'));
+  dragTask = null;
+}
+function onDragOver(e) {
+  e.preventDefault();
+  this.closest('.bucket').classList.add('drag-over');
+}
+function onDragLeave(e) {
+  const b = this.closest('.bucket');
+  if (!b.contains(e.relatedTarget)) b.classList.remove('drag-over');
+}
+function onDrop(e) {
+  e.preventDefault();
+  const bucket = this.closest('.bucket');
+  bucket.classList.remove('drag-over');
+  if (!dragTask) return;
+  const targetBid = bucket.dataset.id;
+  if (targetBid !== dragTask.bucket) moveTask(dragTask.bucket, dragTask.idx, targetBid);
+}
+
+// Touch drag
+function onTouchStart(e) {
+  const li = e.currentTarget;
+  const touch = e.touches[0];
+  const rect = li.getBoundingClientRect();
+  touchOffX = touch.clientX - rect.left;
+  touchOffY = touch.clientY - rect.top;
+  touchSrcBucket = li.dataset.bucket;
+  touchSrcIdx = parseInt(li.dataset.idx);
+
+  const holdTimer = setTimeout(() => {
+    ghostEl = li.cloneNode(true);
+    ghostEl.classList.add('touch-dragging');
+    ghostEl.style.left = (touch.clientX - touchOffX) + 'px';
+    ghostEl.style.top = (touch.clientY - touchOffY) + 'px';
+    document.body.appendChild(ghostEl);
+    li.classList.add('dragging');
+    touchEl = li;
+    document.addEventListener('touchmove', onTouchMove, {passive: false});
+    document.addEventListener('touchend', onTouchEnd);
+  }, 140);
+
+  li.addEventListener('touchend', () => clearTimeout(holdTimer), {once: true});
+  li.addEventListener('touchmove', () => clearTimeout(holdTimer), {once: true, passive: true});
+}
+
+function onTouchMove(e) {
+  e.preventDefault();
+  if (!ghostEl) return;
+  const touch = e.touches[0];
+  ghostEl.style.left = (touch.clientX - touchOffX) + 'px';
+  ghostEl.style.top = (touch.clientY - touchOffY) + 'px';
+  document.querySelectorAll('.bucket').forEach(b => b.classList.remove('drag-over'));
+  ghostEl.style.visibility = 'hidden';
+  const under = document.elementFromPoint(touch.clientX, touch.clientY);
+  ghostEl.style.visibility = '';
+  const bucket = under?.closest('.bucket');
+  if (bucket) bucket.classList.add('drag-over');
+}
+
+function onTouchEnd(e) {
+  if (!ghostEl) return;
+  const touch = e.changedTouches[0];
+  ghostEl.style.visibility = 'hidden';
+  const under = document.elementFromPoint(touch.clientX, touch.clientY);
+  ghostEl.style.visibility = '';
+  const bucket = under?.closest('.bucket');
+  const targetBid = bucket?.dataset.id;
+  ghostEl.remove(); ghostEl = null;
+  touchEl?.classList.remove('dragging'); touchEl = null;
+  document.querySelectorAll('.bucket').forEach(b => b.classList.remove('drag-over'));
+  document.removeEventListener('touchmove', onTouchMove);
+  document.removeEventListener('touchend', onTouchEnd);
+  if (targetBid && targetBid !== touchSrcBucket) moveTask(touchSrcBucket, touchSrcIdx, targetBid);
+}
+
+function bindUI() {
+  const input = document.getElementById('add-input');
+  document.getElementById('add-btn').addEventListener('click', () => {
+    addTask(input.value); input.value = ''; input.focus();
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { addTask(input.value); input.value = ''; }
+  });
+  document.querySelectorAll('.bucket-header').forEach(hdr => {
+    hdr.addEventListener('click', () => {
+      const body = hdr.nextElementSibling;
+      const chevron = hdr.querySelector('.chevron');
+      body.classList.toggle('collapsed');
+      chevron.classList.toggle('up');
+    });
+  });
+}
+
+init();
+</script>
+</body>
+</html>
